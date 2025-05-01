@@ -100,19 +100,19 @@ enum GameState {
 }
 
 fn handle_input(snake: &mut Snake) {
-            // Check for input to change snake position
-            if is_key_pressed(KeyCode::Up) && snake.velocity.x != 0.0 {
-                snake.velocity = Vec2::new(0.0, -snake.speed);
-            } else if is_key_pressed(KeyCode::Down) && snake.velocity.x != 0.0 {
-                snake.velocity = Vec2::new(0.0, snake.speed);
-            } else if is_key_pressed(KeyCode::Left) && snake.velocity.y != 0.0 {
-                snake.velocity = Vec2::new(-snake.speed, 0.0);
-            } else if is_key_pressed(KeyCode::Right) && snake.velocity.y != 0.0 {
-                snake.velocity = Vec2::new(snake.speed, 0.0);
-            } else if is_key_pressed(KeyCode::Space) {
-                snake.grow();
-                snake.speed_up();
-            }    
+    // Check for input to change snake position
+    if is_key_pressed(KeyCode::Up) && snake.velocity.x != 0.0 {
+        snake.velocity = Vec2::new(0.0, -snake.speed);
+    } else if is_key_pressed(KeyCode::Down) && snake.velocity.x != 0.0 {
+        snake.velocity = Vec2::new(0.0, snake.speed);
+    } else if is_key_pressed(KeyCode::Left) && snake.velocity.y != 0.0 {
+        snake.velocity = Vec2::new(-snake.speed, 0.0);
+    } else if is_key_pressed(KeyCode::Right) && snake.velocity.y != 0.0 {
+        snake.velocity = Vec2::new(snake.speed, 0.0);
+    } else if is_key_pressed(KeyCode::Space) {
+        snake.grow();
+        snake.speed_up();
+    }
 }
 
 #[macroquad::main("Snake Game")]
@@ -155,14 +155,17 @@ async fn main() {
                 }
 
                 // Check for collision with walls
-                if snake.head().x < 0.0 || snake.head().x >= W * COLS as f32 ||
-                snake.head().y < 0.0 || snake.head().y >= W * ROWS as f32 {
+                if snake.head().x < 0.0
+                    || snake.head().x >= W * COLS as f32
+                    || snake.head().y < 0.0
+                    || snake.head().y >= W * ROWS as f32
+                {
                     // Game over
                     state = GameState::GameOver;
                 }
             }
         }
-        
+
         clear_background(WHITE);
 
         // Draw the grid
@@ -174,7 +177,8 @@ async fn main() {
         }
 
         // Draw the food
-        let pulsing_food_color = lerp_color(Color::from_hex(0xdcf763), food_color, pulse.sin().abs());
+        let pulsing_food_color =
+            lerp_color(Color::from_hex(0xdcf763), food_color, pulse.sin().abs());
         pulse += 0.01;
         draw_rectangle(food.x.floor(), food.y.floor(), W, W, pulsing_food_color);
 
@@ -187,7 +191,13 @@ async fn main() {
 
         match state {
             GameState::GameOver => {
-                draw_text("Game Over! Press Space to Restart", 10.0, 50.0, font_size, RED);
+                draw_text(
+                    "Game Over! Press Space to Restart",
+                    10.0,
+                    50.0,
+                    font_size,
+                    RED,
+                );
             }
             _ => {}
         }

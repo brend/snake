@@ -46,8 +46,8 @@ impl Snake {
 
     fn grow(&mut self) {
         // Add a new segment to the snake's body
-        let last_segment = *self.body.last().unwrap();
-        self.body.push(last_segment);
+        let last_segment = self.body.last().unwrap();
+        self.body.push(snapv(last_segment));
     }
 
     fn speed_up(&mut self) {
@@ -94,8 +94,33 @@ enum GameState {
     GameOver,
 }
 
-struct Brain {
-    // Placeholder for the brain structure
+struct Brain {}
+
+impl Brain {
+    fn make_move(&self, input: &Vec<f64>) -> Vec<f64> {
+        let snake_x = input[0];
+        let snake_y = input[1];
+        let snake_vx = input[2];
+        let snake_vy = input[3];
+        let food_x = input[4];
+        let food_y = input[5];
+        let dx = food_x - snake_x;
+        let dy = food_y - snake_y;
+        // move towards the food
+        if dx.abs() > dy.abs() {
+            if dx > 0.0 {
+                return vec![0.0, 0.0, 0.0, 1.0]; // Move right
+            } else {
+                return vec![0.0, 0.0, 1.0, 0.0]; // Move left
+            }
+        } else {
+            if dy > 0.0 {
+                return vec![0.0, 1.0, 0.0, 0.0]; // Move down
+            } else {
+                return vec![1.0, 0.0, 0.0, 0.0]; // Move up
+            }
+        }
+    }
 }
 
 struct Game {
@@ -125,8 +150,7 @@ impl Game {
                     self.state = GameState::Running;
                 }
             }
-            _ => {
-                handle_input(&mut self.snake);
+            GameState::Running => {
                 if self.snake.update() {
                     // Check for collision with itself
                     for i in 2..self.snake.len() {
@@ -135,6 +159,27 @@ impl Game {
                             self.state = GameState::GameOver;
                             break;
                         }
+                    }
+
+                    // Get the next move from the brain
+                    let input = vec![
+                        snap(self.snake.head().x) as f64,
+                        snap(self.snake.head().y) as f64,
+                        self.snake.velocity.x as f64,
+                        self.snake.velocity.y as f64,
+                        self.food.x as f64,
+                        self.food.y as f64,
+                    ];
+                    let output = self.brain.make_move(&input);
+                    // Update the snake's velocity based on the brain's output
+                    if output[0] > 0.5 {
+                        self.snake.velocity = Vec2::new(0.0, -self.snake.speed);
+                    } else if output[1] > 0.5 {
+                        self.snake.velocity = Vec2::new(0.0, self.snake.speed);
+                    } else if output[2] > 0.5 {
+                        self.snake.velocity = Vec2::new(-self.snake.speed, 0.0);
+                    } else if output[3] > 0.5 {
+                        self.snake.velocity = Vec2::new(self.snake.speed, 0.0);
                     }
                 }
 
@@ -181,8 +226,9 @@ impl Game {
 
         match self.state {
             GameState::GameOver => {
+                let game_over_message = format!("Game Over! Score: {}. Press Space to Restart", self.evaluate());
                 draw_text(
-                    "Game Over! Press Space to Restart",
+                    &game_over_message,
                     10.0,
                     50.0,
                     font_size,
@@ -192,21 +238,14 @@ impl Game {
             _ => {}
         }
     }
-}
 
-fn handle_input(snake: &mut Snake) {
-    // Check for input to change snake position
-    if is_key_pressed(KeyCode::Up) && snake.velocity.x != 0.0 {
-        snake.velocity = Vec2::new(0.0, -snake.speed);
-    } else if is_key_pressed(KeyCode::Down) && snake.velocity.x != 0.0 {
-        snake.velocity = Vec2::new(0.0, snake.speed);
-    } else if is_key_pressed(KeyCode::Left) && snake.velocity.y != 0.0 {
-        snake.velocity = Vec2::new(-snake.speed, 0.0);
-    } else if is_key_pressed(KeyCode::Right) && snake.velocity.y != 0.0 {
-        snake.velocity = Vec2::new(snake.speed, 0.0);
-    } else if is_key_pressed(KeyCode::Space) {
-        snake.grow();
-        snake.speed_up();
+    fn evaluate(&self) -> f32 {
+        // Evaluate the snake's performance
+        let dx = self.snake.head().x - self.food.x;
+        let dy = self.snake.head().y - self.food.y;
+        let distance_to_food = dx.abs() + dy.abs();
+        let score = self.snake.len() as f32  * 100.0;
+        (score - distance_to_food + (ROWS * COLS) as f32) / 10000.0
     }
 }
 

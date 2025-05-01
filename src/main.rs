@@ -30,8 +30,8 @@ struct Snake {
 impl Snake {
     fn new() -> Self {
         Self {
-            body: vec![random_position()],
-            velocity: Vec2::new(0.01, 0.0),
+            body: vec![Vec2::new(0.0, W * 2.0)],
+            velocity: Vec2::new(INITIAL_SPEED, 0.0),
             speed: INITIAL_SPEED,
         }
     }
@@ -111,6 +111,9 @@ async fn main() {
     let mut food = Vec2::new(W * 10.0, W * 10.0);
     let mut snake = Snake::new();
     let mut state = GameState::Running;
+    let food_color = Color::from_hex(0x355834);
+    let grid_colors = vec![Color::from_hex(0xDEC0F1), Color::from_hex(0xB79CED)];
+    let font_size = 40.0;
 
     loop {
         match state {
@@ -150,32 +153,29 @@ async fn main() {
             }
         }
         
-        // Draw the grid
         clear_background(WHITE);
+
+        // Draw the grid
         for y in 0..ROWS {
             for x in 0..COLS {
-                let color = if (x + y) % 2 == 0 {
-                    LIGHTGRAY
-                } else {
-                    WHITE
-                };
+                let color = grid_colors[(x + y) % 2];
                 draw_rectangle(x as f32 * W, y as f32 * W, W, W, color);
             }
         }
 
         // Draw the food
-        draw_rectangle(food.x.floor(), food.y.floor(), W, W, GREEN);
+        draw_rectangle(food.x.floor(), food.y.floor(), W, W, food_color);
 
         // Draw the snake
         snake.draw();
 
         // Print score (snake length)
         let score = snake.body.len();
-        draw_text(&format!("Score: {}", score), 10.0, 20.0, 20.0, BLACK);
+        draw_text(&format!("Score: {}", score), 10.0, 20.0, font_size, BLACK);
 
         match state {
             GameState::GameOver => {
-                draw_text("Game Over! Press Space to Restart", 10.0, 50.0, 20.0, RED);
+                draw_text("Game Over! Press Space to Restart", 10.0, 50.0, font_size, RED);
             }
             _ => {}
         }

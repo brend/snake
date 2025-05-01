@@ -21,15 +21,6 @@ fn snapv(v: &Vec2) -> Vec2 {
     Vec2::new(snap(v.x), snap(v.y))
 }
 
-fn lerp_color(a: Color, b: Color, t: f32) -> Color {
-    Color::new(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    )
-}
-
 struct Snake {
     body: Vec<Vec2>,
     velocity: Vec2,
@@ -47,6 +38,10 @@ impl Snake {
 
     fn head(&self) -> Vec2 {
         self.body[0]
+    }
+
+    fn len(&self) -> usize {
+        self.body.len()
     }
 
     fn grow(&mut self) {
@@ -99,6 +94,106 @@ enum GameState {
     GameOver,
 }
 
+struct Brain {
+    // Placeholder for the brain structure
+}
+
+struct Game {
+    state: GameState,
+    food: Vec2,
+    snake: Snake,
+    brain: Brain,
+}
+
+impl Game {
+    fn new(brain: Brain) -> Self {
+        Self {
+            state: GameState::Running,
+            food: random_position(),
+            snake: Snake::new(),
+            brain,
+        }
+    }
+
+    fn update(&mut self) {
+        match self.state {
+            GameState::GameOver => {
+                if is_key_pressed(KeyCode::Space) {
+                    // Restart the game
+                    self.snake = Snake::new();
+                    self.food = random_position();
+                    self.state = GameState::Running;
+                }
+            }
+            _ => {
+                handle_input(&mut self.snake);
+                if self.snake.update() {
+                    // Check for collision with itself
+                    for i in 2..self.snake.len() {
+                        if snapv(&self.snake.head()) == snapv(&self.snake.body[i]) {
+                            // Game over
+                            self.state = GameState::GameOver;
+                            break;
+                        }
+                    }
+                }
+
+                // Check for collision with food
+                if self.snake.eat(&self.food) {
+                    self.food = random_position();
+                }
+
+                // Check for collision with walls
+                if self.snake.head().x < 0.0
+                    || self.snake.head().x >= W * COLS as f32
+                    || self.snake.head().y < 0.0
+                    || self.snake.head().y >= W * ROWS as f32
+                {
+                    // Game over
+                    self.state = GameState::GameOver;
+                }
+            }
+        }
+    }
+
+    fn draw(&self) {
+        let food_color = Color::from_hex(0x355834);
+        let grid_colors = vec![Color::from_hex(0xDEC0F1), Color::from_hex(0xB79CED)];
+        let font_size = 40.0;
+    
+        // Draw the grid
+        for y in 0..ROWS {
+            for x in 0..COLS {
+                let color = grid_colors[(x + y) % 2];
+                draw_rectangle(x as f32 * W, y as f32 * W, W, W, color);
+            }
+        }
+
+        // Draw the food
+        draw_rectangle(self.food.x.floor(), self.food.y.floor(), W, W, food_color);
+
+        // Draw the snake
+        self.snake.draw();
+
+        // Print score (snake length)
+        let score = self.snake.body.len();
+        draw_text(&format!("Score: {}", score), 10.0, 20.0, font_size, BLACK);
+
+        match self.state {
+            GameState::GameOver => {
+                draw_text(
+                    "Game Over! Press Space to Restart",
+                    10.0,
+                    50.0,
+                    font_size,
+                    RED,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
 fn handle_input(snake: &mut Snake) {
     // Check for input to change snake position
     if is_key_pressed(KeyCode::Up) && snake.velocity.x != 0.0 {
@@ -117,90 +212,13 @@ fn handle_input(snake: &mut Snake) {
 
 #[macroquad::main("Snake Game")]
 async fn main() {
-    let mut food = Vec2::new(W * 10.0, W * 10.0);
-    let mut snake = Snake::new();
-    let mut state = GameState::Running;
-    let food_color = Color::from_hex(0x355834);
-    let grid_colors = vec![Color::from_hex(0xDEC0F1), Color::from_hex(0xB79CED)];
-    let font_size = 40.0;
-    let mut pulse: f32 = 0.0;
+    let mut game = Game::new(Brain {});
 
     loop {
-        match state {
-            GameState::GameOver => {
-                if is_key_pressed(KeyCode::Space) {
-                    // Restart the game
-                    snake = Snake::new();
-                    food = random_position();
-                    state = GameState::Running;
-                }
-            }
-            _ => {
-                handle_input(&mut snake);
-                if snake.update() {
-                    // Check for collision with itself
-                    for i in 2..snake.body.len() {
-                        if snapv(&snake.head()) == snapv(&snake.body[i]) {
-                            println!("Collision with segment {}", i);
-                            // Game over
-                            state = GameState::GameOver;
-                            break;
-                        }
-                    }
-                }
+        game.update();
 
-                // Check for collision with food
-                if snake.eat(&food) {
-                    food = random_position();
-                }
-
-                // Check for collision with walls
-                if snake.head().x < 0.0
-                    || snake.head().x >= W * COLS as f32
-                    || snake.head().y < 0.0
-                    || snake.head().y >= W * ROWS as f32
-                {
-                    // Game over
-                    state = GameState::GameOver;
-                }
-            }
-        }
-
-        clear_background(WHITE);
-
-        // Draw the grid
-        for y in 0..ROWS {
-            for x in 0..COLS {
-                let color = grid_colors[(x + y) % 2];
-                draw_rectangle(x as f32 * W, y as f32 * W, W, W, color);
-            }
-        }
-
-        // Draw the food
-        let pulsing_food_color =
-            lerp_color(Color::from_hex(0xdcf763), food_color, pulse.sin().abs());
-        pulse += 0.01;
-        draw_rectangle(food.x.floor(), food.y.floor(), W, W, pulsing_food_color);
-
-        // Draw the snake
-        snake.draw();
-
-        // Print score (snake length)
-        let score = snake.body.len();
-        draw_text(&format!("Score: {}", score), 10.0, 20.0, font_size, BLACK);
-
-        match state {
-            GameState::GameOver => {
-                draw_text(
-                    "Game Over! Press Space to Restart",
-                    10.0,
-                    50.0,
-                    font_size,
-                    RED,
-                );
-            }
-            _ => {}
-        }
+        clear_background(BLACK);
+        game.draw();
 
         next_frame().await;
     }

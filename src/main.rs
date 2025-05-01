@@ -21,6 +21,15 @@ fn snapv(v: &Vec2) -> Vec2 {
     Vec2::new(snap(v.x), snap(v.y))
 }
 
+fn lerp_color(a: Color, b: Color, t: f32) -> Color {
+    Color::new(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        a.a + (b.a - a.a) * t,
+    )
+}
+
 struct Snake {
     body: Vec<Vec2>,
     velocity: Vec2,
@@ -114,6 +123,7 @@ async fn main() {
     let food_color = Color::from_hex(0x355834);
     let grid_colors = vec![Color::from_hex(0xDEC0F1), Color::from_hex(0xB79CED)];
     let font_size = 40.0;
+    let mut pulse = 0.0;
 
     loop {
         match state {
@@ -164,7 +174,9 @@ async fn main() {
         }
 
         // Draw the food
-        draw_rectangle(food.x.floor(), food.y.floor(), W, W, food_color);
+        let pulsing_food_color = lerp_color(Color::from_hex(0xFF0000), food_color, pulse);
+        pulse = (pulse + get_frame_time() * 2.0).min(1.0);
+        draw_rectangle(food.x.floor(), food.y.floor(), W, W, pulsing_food_color);
 
         // Draw the snake
         snake.draw();

@@ -2,7 +2,7 @@ use std::vec;
 
 use macroquad::prelude::*;
 
-const W: f32 = 20.0;
+const W: f32 = 30.0;
 const ROWS: usize = 20;
 const COLS: usize = 20;
 const INITIAL_SPEED: f32 = 0.5;

@@ -123,7 +123,7 @@ async fn main() {
     let food_color = Color::from_hex(0x355834);
     let grid_colors = vec![Color::from_hex(0xDEC0F1), Color::from_hex(0xB79CED)];
     let font_size = 40.0;
-    let mut pulse = 0.0;
+    let mut pulse: f32 = 0.0;
 
     loop {
         match state {
@@ -174,8 +174,8 @@ async fn main() {
         }
 
         // Draw the food
-        let pulsing_food_color = lerp_color(Color::from_hex(0xFF0000), food_color, pulse);
-        pulse = (pulse + get_frame_time() * 2.0).min(1.0);
+        let pulsing_food_color = lerp_color(Color::from_hex(0xdcf763), food_color, pulse.sin().abs());
+        pulse += 0.01;
         draw_rectangle(food.x.floor(), food.y.floor(), W, W, pulsing_food_color);
 
         // Draw the snake

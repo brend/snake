@@ -137,6 +137,7 @@ impl Brain {
 struct Game {
     state: GameState,
     food: Pos,
+    steps: usize,
     snake: Snake,
     brain: Brain,
     rng: StdRng,
@@ -148,6 +149,7 @@ impl Game {
         Self {
             state: GameState::Running,
             food: Pos::random(&mut rng),
+            steps: 0,
             snake: Snake::new(),
             brain,
             rng,
@@ -155,6 +157,7 @@ impl Game {
     }
 
     fn update(&mut self) {
+        self.steps += 1;
         match self.state {
             GameState::GameOver => {}
             GameState::Running => {
@@ -210,7 +213,8 @@ impl Game {
         let dx = self.snake.head().x - self.food.x;
         let dy = self.snake.head().y - self.food.y;
         let distance_to_food = dx.abs() + dy.abs();
-        (self.snake.len() as i32 * 100 - distance_to_food + (ROWS as i32 + COLS as i32)) as f32
+        let length_bonus = self.snake.len() as f32 * 100.0;        
+        self.steps as f32 + length_bonus - distance_to_food as f32
     }
 }
 
@@ -243,12 +247,9 @@ fn main() {
             }
 
             let mut alive = false;
-            for game in &mut population {
+            for game in &mut population.iter_mut().filter(|g| g.state == GameState::Running) {
+                alive = true;
                 game.update();
-                match game.state {
-                    GameState::Running => alive = true,
-                    GameState::GameOver => {}
-                }
             }
             if !alive {
                 break;

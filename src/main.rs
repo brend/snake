@@ -1,6 +1,11 @@
 use std::ops::AddAssign;
 use std::vec;
-use neural_network_study::NeuralNetwork;
+use macroquad::color::*;
+use macroquad::shapes::draw_rectangle;
+use macroquad::text::draw_text;
+use macroquad::time::get_time;
+use macroquad::window::{clear_background, next_frame};
+use neural_network_study::{NeuralNetwork, ActivationFunction};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 
@@ -118,8 +123,12 @@ struct Brain {
 
 impl Brain {
     fn new() -> Self {
+        let mut nn = NeuralNetwork::new(4, 6, 4);
+
+        nn.set_activation_function(ActivationFunction::Tanh);
+
         Self {
-            nn: NeuralNetwork::new(4, 6, 4),
+            nn
         }
     }
 
@@ -210,15 +219,19 @@ impl Game {
 
     fn evaluate(&self) -> f32 {
         // Evaluate the snake's performance
-        let dx = self.snake.head().x - self.food.x;
-        let dy = self.snake.head().y - self.food.y;
+        let head = self.snake.head();
+        let food = self.food;
+        //let length = self.snake.len();
+        let dx = head.x - food.x;
+        let dy = head.y - food.y;
         let distance_to_food = dx.abs() + dy.abs();
-        let length_bonus = self.snake.len() as f32 * 100.0;        
-        self.steps as f32 + length_bonus - distance_to_food as f32
+        //let length_bonus = length as f32 * 100.0;        
+        //self.steps as f32 + length_bonus - distance_to_food as f32
+        (COLS as i32 * ROWS as i32 - distance_to_food) as f32
     }
 }
 
-fn main() {
+fn train() -> Option<Brain> {
     let mut rng = StdRng::from_seed([42u8; 32]);
     let mut generation = 0;
     let population_size = 100;
@@ -226,13 +239,14 @@ fn main() {
     for _ in 0..population_size {
         population.push(Game::new(Brain::new()));
     }
+    let mut champion = None;
 
     loop {
         generation += 1;
         println!("Generation: {}", generation);
 
         // DEBUG
-        if generation > 10 {
+        if generation > 100 {
             break;
         }
 
@@ -263,9 +277,11 @@ fn main() {
         let mut score_sum = 0.0;
         let mut best_score = 0.0;
         for (score, game) in &scored_games {
+            assert!(score >= &0.0);
             score_sum += score;
             if score > &best_score {
                 best_score = *score;
+                champion = Some(game.brain.clone());
             }
             mating_pool.push(game);
         }
@@ -295,5 +311,76 @@ fn main() {
             new_population.push(Game::new(child_brain));
         }
         population = new_population;
+    }
+
+    match &champion {
+        Some(champion) => {
+            println!("{}", serde_json::to_string(&champion.nn).unwrap());
+        }
+        None => {
+            println!("No champion found");
+        }
+    }
+
+    champion
+}
+
+const W: f32 = 20.0;
+
+#[macroquad::main("Snake")]
+async fn main() {
+    // Train the neural network
+    let brain = train().expect("Failed to train the neural network");
+    // Create a new game with the trained brain
+    let mut game = Game::new(brain);
+    // Run the game until it's over
+    let update_time = 0.5;
+    let mut last_update = get_time();
+    loop {
+        // Update the game at a fixed interval
+        if get_time() - last_update > update_time {
+            game.update();
+            last_update = get_time();
+        }
+
+        clear_background(BLACK);
+
+        // Draw the grid
+        draw_rectangle(0.0, 0.0, COLS as f32 * W, ROWS as f32 * W, WHITE);
+
+        // Draw the snake
+        for segment in &game.snake.body {
+            draw_rectangle(
+                segment.x as f32 * W,
+                segment.y as f32 * W,
+                W,
+                W,
+                BLACK,
+            );
+        }
+        // Draw the food
+        draw_rectangle(
+            game.food.x as f32 * W,
+            game.food.y as f32 * W,
+            W,
+            W,
+            GREEN,
+        );
+
+        // Update the game state
+        if game.state == GameState::GameOver {
+            draw_text("Game Over", 10.0, W, W, BLACK);
+        } else {
+            draw_text("Running", 10.0, W, W, BLACK);
+        }
+        draw_text(
+            &format!("Score: {}", game.evaluate()),
+            10.0,
+            40.0,
+            W,
+            BLACK,
+        );
+
+        next_frame().await;
     }
 }

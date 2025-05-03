@@ -225,12 +225,12 @@ checksum = "e1bcdd74c20ad5d95aacd60ef9ba40fdf77f767051040541df557b7a9b2a2121"
 
 [[package]]
 name = "neural-network-study"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f6a8fc8f69584b80664840155a1a0b3266fcaac97063b029c08ee12d187e333"
+checksum = "4ed600c63a495b5dd20cc263917d376a7bfe30174b822247d289db73bb3b86c8"
 dependencies = [
- "macroquad",
  "rand",
+ "serde",
  "serde_json",
 ]
 
@@ -381,8 +381,11 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 name = "snake"
 version = "0.1.0"
 dependencies = [
+ "macroquad",
  "neural-network-study",
  "rand",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -9,8 +9,18 @@ use neural_network_study::{NeuralNetwork, ActivationFunction};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 
+// Constants for the game
+/// Number of grid rows
 const ROWS: usize = 20;
+/// Number of grid columns
 const COLS: usize = 20;
+
+/// Size of the population
+const POPULATION_SIZE: usize = 100;
+/// Number of generations
+const GENERATIONS: usize = 100;
+/// Number of steps before the game ends
+const MAX_STEPS: usize = 1000;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Pos {
@@ -234,9 +244,8 @@ impl Game {
 fn train() -> Option<Brain> {
     let mut rng = StdRng::from_seed([42u8; 32]);
     let mut generation = 0;
-    let population_size = 100;
     let mut population = vec![];
-    for _ in 0..population_size {
+    for _ in 0..POPULATION_SIZE {
         population.push(Game::new(Brain::new()));
     }
     let mut champion = None;
@@ -246,17 +255,16 @@ fn train() -> Option<Brain> {
         println!("Generation: {}", generation);
 
         // DEBUG
-        if generation > 100 {
+        if generation > GENERATIONS {
             break;
         }
 
         // Run the simulation with the current population
         // until all games are over
-        let max_steps = 1000;
         let mut steps = 0;
         loop {
             steps += 1;
-            if steps > max_steps {
+            if steps > MAX_STEPS {
                 break;
             }
 
@@ -287,11 +295,11 @@ fn train() -> Option<Brain> {
         }
 
         println!("Best score: {}", best_score);
-        println!("Average score: {}", score_sum / population_size as f32);
+        println!("Average score: {}", score_sum / POPULATION_SIZE as f32);
 
         // Create a new generation
         let mut new_population = vec![];
-        for _ in 0..population_size {
+        for _ in 0..POPULATION_SIZE {
             // Randomly select a parent from the mating pool
             let r = rng.random_range(0.0..score_sum);
             let mut cumulative_score = 0.0;

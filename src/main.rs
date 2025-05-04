@@ -36,8 +36,8 @@ impl Pos {
     }
 
     fn random(rng: &mut StdRng) -> Self {
-        let x = rng.random_range(0..COLS as i32);
-        let y = rng.random_range(0..ROWS as i32);
+        let x = rng.random_range(0..COLS);
+        let y = rng.random_range(0..ROWS);
         Self::new(x, y)
     }
 }
@@ -147,7 +147,7 @@ impl Snake {
 #[derive(PartialEq)]
 enum GameState {
     Running,
-    Lost,
+    Over,
 }
 
 #[derive(Clone)]
@@ -157,7 +157,7 @@ struct Brain {
 
 impl Brain {
     fn new(rng: Option<&mut StdRng>) -> Self {
-        let mut nn = NeuralNetwork::new(14, 32, 4, rng);
+        let mut nn = NeuralNetwork::new(14, 16, 4, rng);
 
         nn.set_activation_function(ActivationFunction::Tanh);
 
@@ -166,8 +166,7 @@ impl Brain {
 
     fn make_move(&self, input: &Vec<f64>) -> Vec<f64> {
         // Use the neural network to make a move
-        let output = self.nn.predict(input.clone());
-        output
+        self.nn.predict(input.clone());
     }
 
     fn mutate(&mut self, rng: &mut StdRng, mutation_rate: f64) {
@@ -199,7 +198,7 @@ impl Game {
 
     fn update(&mut self) {
         match self.state {
-            GameState::Lost => {}
+            GameState::Over => {}
             GameState::Running => {
                 self.steps += 1;
                 self.snake.update();
@@ -207,7 +206,7 @@ impl Game {
                 for i in 2..self.snake.len() {
                     if self.snake.head() == self.snake.body[i] {
                         // Game over
-                        self.state = GameState::Lost;
+                        self.state = GameState::Over;
                         break;
                     }
                 }
@@ -240,12 +239,12 @@ impl Game {
 
                 // Check for collision with walls
                 if self.snake.head().x < 0
-                    || self.snake.head().x >= COLS as i32
+                    || self.snake.head().x >= COLS
                     || self.snake.head().y < 0
-                    || self.snake.head().y >= ROWS as i32
+                    || self.snake.head().y >= ROWS
                 {
                     // Game over
-                    self.state = GameState::Lost;
+                    self.state = GameState::Over;
                 }
             }
         }
@@ -278,12 +277,13 @@ impl Game {
     }
 
     fn evaluate(&self) -> f32 {
-        let head = self.snake.head();
-        let food = self.food;
-        let dx = (food.x - head.x).abs();
-        let dy = (food.y - head.y).abs();
-        let proximity = ((COLS + ROWS) - (dx + dy)) as f32;
-        100.0 * self.snake.len() as f32 + 0.1 * self.steps as f32 + proximity
+        let len = self.snake.len();
+
+        if len > 1 {
+            100.0 * len as f32 / self.steps as f32
+        } else {
+            0.01 * self.steps as f32
+        }
     }
 
     fn look_in_direction(&self, direction: Dir) -> (f64, f64) {

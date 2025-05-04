@@ -1,26 +1,28 @@
-use std::ops::AddAssign;
-use std::vec;
 use macroquad::color::*;
 use macroquad::shapes::draw_rectangle;
 use macroquad::text::draw_text;
 use macroquad::time::get_time;
 use macroquad::window::{clear_background, next_frame};
-use neural_network_study::{NeuralNetwork, ActivationFunction};
+use neural_network_study::{ActivationFunction, NeuralNetwork};
 use rand::prelude::*;
 use rand::rngs::StdRng;
+use std::ops::AddAssign;
+use std::vec;
 
 // Constants for the game
 /// Number of grid rows
-const ROWS: usize = 20;
+const ROWS: i32 = 20;
 /// Number of grid columns
-const COLS: usize = 20;
+const COLS: i32 = 20;
 
 /// Size of the population
-const POPULATION_SIZE: usize = 100;
+const POPULATION_SIZE: usize = 250;
 /// Number of generations
-const GENERATIONS: usize = 100;
+const GENERATIONS: usize = 200;
 /// Number of steps before the game ends
-const MAX_STEPS: usize = 1000;
+const MAX_STEPS: usize = 500;
+/// Probability of mutation of a gene (weight) of the neural network
+const MUTATION_RATE: f64 = 0.1;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Pos {
@@ -43,10 +45,16 @@ impl Pos {
 impl AddAssign<Dir> for Pos {
     fn add_assign(&mut self, dir: Dir) {
         match dir {
-            Dir::Horizontal(x) => self.x = self.x + x,
-            Dir::Vertical(y) => self.y = self.y + y,
+            Dir::Horizontal(x) => self.x += x,
+            Dir::Vertical(y) => self.y += y,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Dir {
+    Horizontal(i32),
+    Vertical(i32),
 }
 
 impl Dir {
@@ -65,12 +73,20 @@ impl Dir {
     fn right() -> Self {
         Self::Horizontal(1)
     }
-}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Dir {
-    Horizontal(i32),
-    Vertical(i32),
+    fn hval(&self) -> i32 {
+        match self {
+            Self::Horizontal(i) => *i,
+            _ => 0,
+        }
+    }
+
+    fn vval(&self) -> i32 {
+        match self {
+            Self::Vertical(i) => *i,
+            _ => 0,
+        }
+    }
 }
 
 struct Snake {
@@ -79,9 +95,9 @@ struct Snake {
 }
 
 impl Snake {
-    fn new() -> Self {
+    fn new(x: i32, y: i32) -> Self {
         Self {
-            body: vec![Pos::new(0, 2)],
+            body: vec![Pos::new(x, y)],
             direction: Dir::Horizontal(1),
         }
     }
@@ -92,6 +108,14 @@ impl Snake {
 
     fn len(&self) -> usize {
         self.body.len()
+    }
+
+    fn can_turn(&self, new_direction: Dir) -> bool {
+        match (self.direction, new_direction) {
+            (Dir::Horizontal(_), Dir::Horizontal(_)) => false,
+            (Dir::Vertical(_), Dir::Vertical(_)) => false,
+            _ => true,
+        }
     }
 
     fn grow(&mut self) {
@@ -123,7 +147,7 @@ impl Snake {
 #[derive(PartialEq)]
 enum GameState {
     Running,
-    GameOver,
+    Lost,
 }
 
 #[derive(Clone)]
@@ -132,14 +156,12 @@ struct Brain {
 }
 
 impl Brain {
-    fn new() -> Self {
-        let mut nn = NeuralNetwork::new(4, 6, 4);
+    fn new(rng: Option<&mut StdRng>) -> Self {
+        let mut nn = NeuralNetwork::new(14, 32, 4, rng);
 
         nn.set_activation_function(ActivationFunction::Tanh);
 
-        Self {
-            nn
-        }
+        Self { nn }
     }
 
     fn make_move(&self, input: &Vec<f64>) -> Vec<f64> {
@@ -148,8 +170,8 @@ impl Brain {
         output
     }
 
-    fn mutate(&mut self) {
-        self.nn.mutate(0.1);
+    fn mutate(&mut self, rng: &mut StdRng, mutation_rate: f64) {
+        self.nn.mutate(rng, mutation_rate);
     }
 }
 
@@ -164,49 +186,51 @@ struct Game {
 
 impl Game {
     fn new(brain: Brain) -> Self {
-        let mut rng = StdRng::from_seed([42u8; 32]);
+        let mut rng = StdRng::from_os_rng();
         Self {
             state: GameState::Running,
             food: Pos::random(&mut rng),
             steps: 0,
-            snake: Snake::new(),
+            snake: Snake::new(COLS / 2, ROWS / 2),
             brain,
             rng,
         }
     }
 
     fn update(&mut self) {
-        self.steps += 1;
         match self.state {
-            GameState::GameOver => {}
+            GameState::Lost => {}
             GameState::Running => {
+                self.steps += 1;
                 self.snake.update();
                 // Check for collision with itself
                 for i in 2..self.snake.len() {
                     if self.snake.head() == self.snake.body[i] {
                         // Game over
-                        self.state = GameState::GameOver;
+                        self.state = GameState::Lost;
                         break;
                     }
                 }
 
                 // Get the next move from the brain
-                let input = vec![
-                    self.snake.head().x as f64 / COLS as f64,
-                    self.snake.head().y as f64 / ROWS as f64,
-                    self.food.x as f64 / COLS as f64,
-                    self.food.y as f64 / ROWS as f64,
-                ];
+                let input = self.input();
                 let output = self.brain.make_move(&input);
                 // Update the snake's direction based on the brain's output
-                if output[0] > 0.5 {
-                    self.snake.direction = Dir::up();
-                } else if output[1] > 0.5 {
-                    self.snake.direction = Dir::down();
-                } else if output[2] > 0.5 {
-                    self.snake.direction = Dir::left();
-                } else if output[3] > 0.5 {
-                    self.snake.direction = Dir::right();
+                let max_index = output
+                    .iter()
+                    .enumerate()
+                    .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                    .map(|(idx, _)| idx)
+                    .unwrap();
+                let desired_direction = match max_index {
+                    0 => Dir::up(),
+                    1 => Dir::down(),
+                    2 => Dir::left(),
+                    3 => Dir::right(),
+                    _ => self.snake.direction,
+                };
+                if self.snake.can_turn(desired_direction) {
+                    self.snake.direction = desired_direction;
                 }
 
                 // Check for collision with food
@@ -221,32 +245,72 @@ impl Game {
                     || self.snake.head().y >= ROWS as i32
                 {
                     // Game over
-                    self.state = GameState::GameOver;
+                    self.state = GameState::Lost;
                 }
             }
         }
     }
 
+    fn input(&self) -> Vec<f64> {
+        let head = self.snake.head();
+        vec![
+            // snake head x position
+            head.x as f64 / COLS as f64,
+            // snake head y position
+            head.y as f64 / ROWS as f64,
+            // snake horizontal speed
+            self.snake.direction.hval() as f64,
+            // snake vertical speed
+            self.snake.direction.vval() as f64,
+            // horizontal distance from food
+            (self.food.x - head.x) as f64 / COLS as f64,
+            // vertical distance from food
+            (self.food.y - head.y) as f64 / ROWS as f64,
+            self.look_in_direction(Dir::up()).0, // Wall distance up
+            self.look_in_direction(Dir::up()).1, // Body hit up
+            self.look_in_direction(Dir::down()).0,
+            self.look_in_direction(Dir::down()).1,
+            self.look_in_direction(Dir::left()).0,
+            self.look_in_direction(Dir::left()).1,
+            self.look_in_direction(Dir::right()).0,
+            self.look_in_direction(Dir::right()).1,
+        ]
+    }
+
     fn evaluate(&self) -> f32 {
-        // Evaluate the snake's performance
         let head = self.snake.head();
         let food = self.food;
-        //let length = self.snake.len();
-        let dx = head.x - food.x;
-        let dy = head.y - food.y;
-        let distance_to_food = dx.abs() + dy.abs();
-        //let length_bonus = length as f32 * 100.0;        
-        //self.steps as f32 + length_bonus - distance_to_food as f32
-        (COLS as i32 * ROWS as i32 - distance_to_food) as f32
+        let dx = (food.x - head.x).abs();
+        let dy = (food.y - head.y).abs();
+        let proximity = ((COLS + ROWS) - (dx + dy)) as f32;
+        100.0 * self.snake.len() as f32 + 0.1 * self.steps as f32 + proximity
+    }
+
+    fn look_in_direction(&self, direction: Dir) -> (f64, f64) {
+        let mut pos = self.snake.head();
+        let mut distance = 0.0;
+        let mut body_hit = 0.0;
+        loop {
+            pos += direction;
+            distance += 1.0;
+            if pos.x < 0 || pos.x >= COLS || pos.y < 0 || pos.y >= ROWS {
+                break; // Hit a wall
+            }
+            if self.snake.body.contains(&pos) {
+                body_hit = 1.0; // Hit body
+                break;
+            }
+        }
+        (distance / COLS as f64, body_hit) // Normalized distance, body hit indicator
     }
 }
 
 fn train() -> Option<Brain> {
-    let mut rng = StdRng::from_seed([42u8; 32]);
+    let mut rng = StdRng::from_os_rng();
     let mut generation = 0;
     let mut population = vec![];
     for _ in 0..POPULATION_SIZE {
-        population.push(Game::new(Brain::new()));
+        population.push(Game::new(Brain::new(Some(&mut rng))));
     }
     let mut champion = None;
 
@@ -254,7 +318,6 @@ fn train() -> Option<Brain> {
         generation += 1;
         println!("Generation: {}", generation);
 
-        // DEBUG
         if generation > GENERATIONS {
             break;
         }
@@ -269,7 +332,10 @@ fn train() -> Option<Brain> {
             }
 
             let mut alive = false;
-            for game in &mut population.iter_mut().filter(|g| g.state == GameState::Running) {
+            for game in &mut population
+                .iter_mut()
+                .filter(|g| g.state == GameState::Running)
+            {
                 alive = true;
                 game.update();
             }
@@ -280,7 +346,10 @@ fn train() -> Option<Brain> {
 
         // Evaluate the population and create a mating pool
         let mut mating_pool = vec![];
-        let mut scored_games = population.iter().map(|g| (g.evaluate(), g)).collect::<Vec<_>>();
+        let mut scored_games = population
+            .iter()
+            .map(|g| (g.evaluate(), g))
+            .collect::<Vec<_>>();
         scored_games.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
         let mut score_sum = 0.0;
         let mut best_score = 0.0;
@@ -299,23 +368,31 @@ fn train() -> Option<Brain> {
 
         // Create a new generation
         let mut new_population = vec![];
-        for _ in 0..POPULATION_SIZE {
+        let len = scored_games.len();
+        while new_population.len() < POPULATION_SIZE {
             // Randomly select a parent from the mating pool
-            let r = rng.random_range(0.0..score_sum);
-            let mut cumulative_score = 0.0;
-            let mut selected_parent = None;
-            for (score, game) in &scored_games {
-                cumulative_score += score;
-                if cumulative_score >= r {
-                    selected_parent = Some(game);
-                    break;
+            let selected_parent = if score_sum > 0.0 {
+                let r = rng.random_range(0.0..score_sum);
+                let mut cumulative_score = 0.0;
+                let mut selected_parent = None;
+                for (score, game) in &scored_games {
+                    cumulative_score += score;
+                    if cumulative_score >= r {
+                        selected_parent = Some(game);
+                        break;
+                    }
                 }
-            }
+                selected_parent
+            } else if score_sum == 0.0 {
+                let i = rng.random_range(0..len);
+                Some(&scored_games[i].1)
+            } else {
+                panic!();
+            };
             let selected_parent = selected_parent.unwrap();
             // Apply some mutation to the parent's brain
             let mut child_brain = selected_parent.brain.clone();
-            child_brain.mutate();
-            // Create a new child by combining the parents' brains
+            child_brain.mutate(&mut rng, MUTATION_RATE);
             new_population.push(Game::new(child_brain));
         }
         population = new_population;
@@ -358,36 +435,18 @@ async fn main() {
 
         // Draw the snake
         for segment in &game.snake.body {
-            draw_rectangle(
-                segment.x as f32 * W,
-                segment.y as f32 * W,
-                W,
-                W,
-                BLACK,
-            );
+            draw_rectangle(segment.x as f32 * W, segment.y as f32 * W, W, W, BLACK);
         }
         // Draw the food
-        draw_rectangle(
-            game.food.x as f32 * W,
-            game.food.y as f32 * W,
-            W,
-            W,
-            GREEN,
-        );
+        draw_rectangle(game.food.x as f32 * W, game.food.y as f32 * W, W, W, GREEN);
 
         // Update the game state
-        if game.state == GameState::GameOver {
+        if game.state != GameState::Running {
             draw_text("Game Over", 10.0, W, W, BLACK);
         } else {
             draw_text("Running", 10.0, W, W, BLACK);
         }
-        draw_text(
-            &format!("Score: {}", game.evaluate()),
-            10.0,
-            40.0,
-            W,
-            BLACK,
-        );
+        draw_text(&format!("Score: {}", game.evaluate()), 10.0, 40.0, W, BLACK);
 
         next_frame().await;
     }
